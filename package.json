@@ -1,0 +1,48 @@
+{
+  "name": "timberlogs",
+  "version": "1.0.0",
+  "description": "TypeScript SDK for Timberlogs - structured logging made simple",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "logging",
+    "typescript",
+    "structured-logging",
+    "timberlogs",
+    "convex"
+  ],
+  "author": "enaboapps",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/enaboapps/timberlogs-typescript-sdk.git"
+  },
+  "homepage": "https://github.com/enaboapps/timberlogs-typescript-sdk#readme",
+  "bugs": {
+    "url": "https://github.com/enaboapps/timberlogs-typescript-sdk/issues"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.6.0"
+  }
+}
