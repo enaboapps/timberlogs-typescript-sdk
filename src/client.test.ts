@@ -360,38 +360,62 @@ describe("TimberlogsClient", () => {
   });
 
   describe("flow", () => {
-    it("creates a flow with auto-generated id", () => {
+    const mockFlowResponse = (flowId: string, name: string) => ({
+      ok: true,
+      json: async () => ({ flowId, name }),
+    });
+
+    beforeEach(() => {
+      vi.stubGlobal("fetch", vi.fn());
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("creates a flow with server-generated id", async () => {
+      (fetch as any).mockResolvedValueOnce(mockFlowResponse("checkout-abc12345", "checkout"));
+
       const client = createTimberlogs({
         source: "test-app",
         environment: "production",
+        apiKey: "tb_test_key",
       });
 
-      const flow = client.flow("checkout");
+      const flow = await client.flow("checkout");
 
       expect(flow).toBeInstanceOf(Flow);
       expect(flow.name).toBe("checkout");
-      expect(flow.id).toMatch(/^checkout-[a-z0-9]{8}$/);
+      expect(flow.id).toBe("checkout-abc12345");
     });
 
-    it("generates unique ids for each flow", () => {
+    it("generates unique ids for each flow", async () => {
+      (fetch as any)
+        .mockResolvedValueOnce(mockFlowResponse("checkout-abc12345", "checkout"))
+        .mockResolvedValueOnce(mockFlowResponse("checkout-xyz98765", "checkout"));
+
       const client = createTimberlogs({
         source: "test-app",
         environment: "production",
+        apiKey: "tb_test_key",
       });
 
-      const flow1 = client.flow("checkout");
-      const flow2 = client.flow("checkout");
+      const flow1 = await client.flow("checkout");
+      const flow2 = await client.flow("checkout");
 
       expect(flow1.id).not.toBe(flow2.id);
     });
 
-    it("logs with flowId and auto-incrementing stepIndex", () => {
+    it("logs with flowId and auto-incrementing stepIndex", async () => {
+      (fetch as any).mockResolvedValueOnce(mockFlowResponse("checkout-abc12345", "checkout"));
+
       const client = createTimberlogs({
         source: "test-app",
         environment: "production",
+        apiKey: "tb_test_key",
       });
 
-      const flow = client.flow("checkout");
+      const flow = await client.flow("checkout");
       flow.info("Step 1");
       flow.info("Step 2");
       flow.info("Step 3");
@@ -404,13 +428,16 @@ describe("TimberlogsClient", () => {
       expect(queue[2].stepIndex).toBe(2);
     });
 
-    it("supports all log levels", () => {
+    it("supports all log levels", async () => {
+      (fetch as any).mockResolvedValueOnce(mockFlowResponse("test-abc12345", "test"));
+
       const client = createTimberlogs({
         source: "test-app",
         environment: "production",
+        apiKey: "tb_test_key",
       });
 
-      const flow = client.flow("test");
+      const flow = await client.flow("test");
       flow.debug("Debug");
       flow.info("Info");
       flow.warn("Warn");
@@ -424,13 +451,16 @@ describe("TimberlogsClient", () => {
       expect(queue[3].level).toBe("error");
     });
 
-    it("supports data and tags", () => {
+    it("supports data and tags", async () => {
+      (fetch as any).mockResolvedValueOnce(mockFlowResponse("checkout-abc12345", "checkout"));
+
       const client = createTimberlogs({
         source: "test-app",
         environment: "production",
+        apiKey: "tb_test_key",
       });
 
-      const flow = client.flow("checkout");
+      const flow = await client.flow("checkout");
       flow.info("Processing", { orderId: "123" }, { tags: ["payment"] });
 
       const queue = (client as any).queue;
@@ -438,13 +468,16 @@ describe("TimberlogsClient", () => {
       expect(queue[0].tags).toEqual(["payment"]);
     });
 
-    it("handles Error objects in error()", () => {
+    it("handles Error objects in error()", async () => {
+      (fetch as any).mockResolvedValueOnce(mockFlowResponse("checkout-abc12345", "checkout"));
+
       const client = createTimberlogs({
         source: "test-app",
         environment: "production",
+        apiKey: "tb_test_key",
       });
 
-      const flow = client.flow("checkout");
+      const flow = await client.flow("checkout");
       const error = new Error("Payment failed");
       flow.error("Payment error", error);
 
@@ -454,27 +487,33 @@ describe("TimberlogsClient", () => {
       expect(queue[0].errorStack).toBeDefined();
     });
 
-    it("allows chaining", () => {
+    it("allows chaining", async () => {
+      (fetch as any).mockResolvedValueOnce(mockFlowResponse("checkout-abc12345", "checkout"));
+
       const client = createTimberlogs({
         source: "test-app",
         environment: "production",
+        apiKey: "tb_test_key",
       });
 
-      const flow = client.flow("checkout");
+      const flow = await client.flow("checkout");
       const result = flow.info("Step 1").info("Step 2").warn("Warning");
 
       expect(result).toBe(flow);
       expect((client as any).queue).toHaveLength(3);
     });
 
-    it("does not create stepIndex gaps when logs are filtered by minLevel", () => {
+    it("does not create stepIndex gaps when logs are filtered by minLevel", async () => {
+      (fetch as any).mockResolvedValueOnce(mockFlowResponse("checkout-abc12345", "checkout"));
+
       const client = createTimberlogs({
         source: "test-app",
         environment: "production",
+        apiKey: "tb_test_key",
         minLevel: "warn", // Only warn and error will be emitted
       });
 
-      const flow = client.flow("checkout");
+      const flow = await client.flow("checkout");
       flow.debug("Debug - filtered");  // Should not increment stepIndex
       flow.info("Info - filtered");    // Should not increment stepIndex
       flow.warn("Warn - emitted");     // stepIndex: 0
@@ -486,6 +525,15 @@ describe("TimberlogsClient", () => {
       expect(queue[0].stepIndex).toBe(0);
       expect(queue[1].level).toBe("error");
       expect(queue[1].stepIndex).toBe(1);
+    });
+
+    it("throws error when apiKey is not provided", async () => {
+      const client = createTimberlogs({
+        source: "test-app",
+        environment: "production",
+      });
+
+      await expect(client.flow("checkout")).rejects.toThrow("API key required to create flows");
     });
   });
 });

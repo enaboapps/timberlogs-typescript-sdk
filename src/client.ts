@@ -14,42 +14,13 @@ const DEFAULT_RETRY = {
 };
 
 const TIMBERLOGS_ENDPOINT = "https://timberlogs-ingest.enaboapps.workers.dev/v1/logs";
-
-/**
- * Generate a short random ID for flow tracking using crypto-secure randomness
- */
-function generateFlowId(name: string): string {
-  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
-  const length = 8;
-  let suffix = "";
-
-  // Type-safe access to globalThis for cross-environment compatibility
-  const g = globalThis as {
-    crypto?: { getRandomValues?: (arr: Uint8Array) => Uint8Array };
-  } & typeof globalThis;
-
-  // Use Web Crypto API (browsers and Node.js 15+)
-  if (g.crypto?.getRandomValues) {
-    const bytes = new Uint8Array(length);
-    g.crypto.getRandomValues(bytes);
-    for (let i = 0; i < length; i++) {
-      suffix += chars[bytes[i] % chars.length];
-    }
-  } else {
-    // Fallback to Math.random for older environments
-    for (let i = 0; i < length; i++) {
-      suffix += chars[Math.floor(Math.random() * chars.length)];
-    }
-  }
-
-  return `${name}-${suffix}`;
-}
+const TIMBERLOGS_FLOWS_ENDPOINT = "https://timberlogs-ingest.enaboapps.workers.dev/v1/flows";
 
 /**
  * A Flow tracks a sequence of related log entries
  *
  * @example
- * const flow = logger.flow("checkout");
+ * const flow = await logger.flow("checkout");
  * flow.info("User started checkout");
  * flow.info("Processing payment");
  * flow.info("Order confirmed");
@@ -62,9 +33,9 @@ export class Flow {
   private stepIndex = 0;
   private client: TimberlogsClient;
 
-  constructor(name: string, client: TimberlogsClient) {
+  constructor(id: string, name: string, client: TimberlogsClient) {
+    this.id = id;
     this.name = name;
-    this.id = generateFlowId(name);
     this.client = client;
   }
 
@@ -234,14 +205,33 @@ export class TimberlogsClient {
    * Create a new flow for tracking related log entries
    *
    * @example
-   * const flow = logger.flow("checkout");
+   * const flow = await logger.flow("checkout");
    * flow.info("User started checkout");
    * flow.info("Processing payment");
    * flow.info("Order confirmed");
    * console.log(flow.id); // "checkout-a7x9k2f3"
    */
-  flow(name: string): Flow {
-    return new Flow(name, this);
+  async flow(name: string): Promise<Flow> {
+    if (!this.config.apiKey) {
+      throw new Error("API key required to create flows");
+    }
+
+    const response = await fetch(TIMBERLOGS_FLOWS_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-API-Key": this.config.apiKey,
+      },
+      body: JSON.stringify({ name }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Failed to create flow: ${text}`);
+    }
+
+    const data = (await response.json()) as { flowId: string; name: string };
+    return new Flow(data.flowId, data.name, this);
   }
 
   /**
