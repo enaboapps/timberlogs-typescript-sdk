@@ -1,4 +1,4 @@
-export { TimberlogsClient, createTimberlogs } from "./client";
+export { TimberlogsClient, createTimberlogs, Flow } from "./client";
 export type {
   LogLevel,
   Environment,

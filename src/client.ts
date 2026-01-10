@@ -13,6 +13,137 @@ const DEFAULT_RETRY = {
   maxDelayMs: 30000,
 };
 
+/**
+ * Generate a short random ID for flow tracking using crypto-secure randomness
+ */
+function generateFlowId(name: string): string {
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  const length = 8;
+  let suffix = "";
+
+  // Type-safe access to globalThis for cross-environment compatibility
+  const g = globalThis as {
+    crypto?: { getRandomValues?: (arr: Uint8Array) => Uint8Array };
+  } & typeof globalThis;
+
+  // Use Web Crypto API (browsers and Node.js 15+)
+  if (g.crypto?.getRandomValues) {
+    const bytes = new Uint8Array(length);
+    g.crypto.getRandomValues(bytes);
+    for (let i = 0; i < length; i++) {
+      suffix += chars[bytes[i] % chars.length];
+    }
+  } else {
+    // Fallback to Math.random for older environments
+    for (let i = 0; i < length; i++) {
+      suffix += chars[Math.floor(Math.random() * chars.length)];
+    }
+  }
+
+  return `${name}-${suffix}`;
+}
+
+/**
+ * A Flow tracks a sequence of related log entries
+ *
+ * @example
+ * const flow = logger.flow("checkout");
+ * flow.info("User started checkout");
+ * flow.info("Processing payment");
+ * flow.info("Order confirmed");
+ */
+export class Flow {
+  /** The unique identifier for this flow instance */
+  readonly id: string;
+  /** The human-readable name of the flow */
+  readonly name: string;
+  private stepIndex = 0;
+  private client: TimberlogsClient;
+
+  constructor(name: string, client: TimberlogsClient) {
+    this.name = name;
+    this.id = generateFlowId(name);
+    this.client = client;
+  }
+
+  /**
+   * Log a debug message in this flow
+   */
+  debug(message: string, data?: Record<string, unknown>, options?: { tags?: string[] }): this {
+    return this.logWithLevel("debug", message, data, options);
+  }
+
+  /**
+   * Log an info message in this flow
+   */
+  info(message: string, data?: Record<string, unknown>, options?: { tags?: string[] }): this {
+    return this.logWithLevel("info", message, data, options);
+  }
+
+  /**
+   * Log a warning message in this flow
+   */
+  warn(message: string, data?: Record<string, unknown>, options?: { tags?: string[] }): this {
+    return this.logWithLevel("warn", message, data, options);
+  }
+
+  /**
+   * Log an error message in this flow
+   */
+  error(message: string, error?: Error | Record<string, unknown>, options?: { tags?: string[] }): this {
+    // Only increment stepIndex if log will actually be emitted
+    if (!this.client.shouldLog("error")) {
+      return this;
+    }
+
+    const step = this.stepIndex++;
+    if (error instanceof Error) {
+      this.client.log({
+        level: "error",
+        message,
+        errorName: error.name,
+        errorStack: error.stack,
+        data: { message: error.message },
+        tags: options?.tags,
+        flowId: this.id,
+        stepIndex: step,
+      });
+    } else {
+      this.client.log({
+        level: "error",
+        message,
+        data: error,
+        tags: options?.tags,
+        flowId: this.id,
+        stepIndex: step,
+      });
+    }
+    return this;
+  }
+
+  private logWithLevel(
+    level: LogLevel,
+    message: string,
+    data?: Record<string, unknown>,
+    options?: { tags?: string[] }
+  ): this {
+    // Only increment stepIndex if log will actually be emitted
+    if (!this.client.shouldLog(level)) {
+      return this;
+    }
+
+    this.client.log({
+      level,
+      message,
+      data,
+      tags: options?.tags,
+      flowId: this.id,
+      stepIndex: this.stepIndex++,
+    });
+    return this;
+  }
+}
+
 export class TimberlogsClient {
   private config: Required<
     Pick<TimberlogsConfig, "source" | "environment" | "batchSize" | "flushInterval" | "minLevel">
@@ -100,6 +231,20 @@ export class TimberlogsClient {
   }
 
   /**
+   * Create a new flow for tracking related log entries
+   *
+   * @example
+   * const flow = logger.flow("checkout");
+   * flow.info("User started checkout");
+   * flow.info("Processing payment");
+   * flow.info("Order confirmed");
+   * console.log(flow.id); // "checkout-a7x9k2f3"
+   */
+  flow(name: string): Flow {
+    return new Flow(name, this);
+  }
+
+  /**
    * Log a debug message
    */
   debug(message: string, data?: Record<string, unknown>, options?: { tags?: string[] }) {
@@ -158,6 +303,8 @@ export class TimberlogsClient {
       errorName: entry.errorName,
       errorStack: entry.errorStack,
       tags: entry.tags,
+      flowId: entry.flowId,
+      stepIndex: entry.stepIndex,
     };
 
     this.queue.push(logArgs);
@@ -238,7 +385,10 @@ export class TimberlogsClient {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  private shouldLog(level: LogLevel): boolean {
+  /**
+   * Check if a log level will be emitted based on minLevel config
+   */
+  shouldLog(level: LogLevel): boolean {
     return LOG_LEVEL_PRIORITY[level] >= LOG_LEVEL_PRIORITY[this.config.minLevel];
   }
 
