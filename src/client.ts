@@ -13,6 +13,8 @@ const DEFAULT_RETRY = {
   maxDelayMs: 30000,
 };
 
+const TIMBERLOGS_ENDPOINT = "https://timberlogs-ingest.enaboapps.workers.dev/v1/logs";
+
 /**
  * Generate a short random ID for flow tracking using crypto-secure randomness
  */
@@ -149,7 +151,6 @@ export class TimberlogsClient {
     Pick<TimberlogsConfig, "source" | "environment" | "batchSize" | "flushInterval" | "minLevel">
   > & {
     apiKey?: string;
-    endpoint?: string;
     version?: string;
     userId?: string;
     sessionId?: string;
@@ -167,7 +168,6 @@ export class TimberlogsClient {
       source: config.source,
       environment: config.environment,
       apiKey: config.apiKey,
-      endpoint: config.endpoint,
       version: config.version,
       userId: config.userId,
       sessionId: config.sessionId,
@@ -182,8 +182,8 @@ export class TimberlogsClient {
       },
     };
 
-    // Auto-start HTTP transport if apiKey and endpoint provided
-    if (config.apiKey && config.endpoint) {
+    // Auto-start HTTP transport if apiKey provided
+    if (config.apiKey) {
       this.useHttp = true;
       this.startAutoFlush();
     }
@@ -344,8 +344,8 @@ export class TimberlogsClient {
    * Send logs via HTTP with retry
    */
   private async sendHttpBatch(logs: Omit<CreateLogArgs, "apiKey">[]) {
-    if (!this.config.endpoint || !this.config.apiKey) {
-      throw new Error("HTTP transport requires endpoint and apiKey");
+    if (!this.config.apiKey) {
+      throw new Error("HTTP transport requires apiKey");
     }
 
     let lastError: Error | null = null;
@@ -353,7 +353,7 @@ export class TimberlogsClient {
 
     for (let attempt = 0; attempt <= this.config.retry.maxRetries; attempt++) {
       try {
-        const response = await fetch(this.config.endpoint, {
+        const response = await fetch(TIMBERLOGS_ENDPOINT, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -419,27 +419,14 @@ export class TimberlogsClient {
  * Create a new Timberlogs client
  *
  * @example
- * // With HTTP transport
  * const logger = createTimberlogs({
  *   source: "api-server",
  *   environment: "production",
  *   apiKey: "tb_live_xxxxx",
- *   endpoint: "https://your-app.com/api/logs",
  * });
  *
  * logger.info("Server started", { port: 3000 });
  * logger.error("Something went wrong", new Error("Oops"));
- *
- * @example
- * // With custom backend integration
- * const logger = createTimberlogs({
- *   source: "web-app",
- *   environment: "production",
- * });
- * logger.connect({
- *   createLog: myCreateLogFn,
- *   createBatchLogs: myBatchLogsFn,
- * });
  */
 export function createTimberlogs(config: TimberlogsConfig): TimberlogsClient {
   return new TimberlogsClient(config);

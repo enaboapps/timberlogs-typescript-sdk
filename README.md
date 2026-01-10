@@ -21,7 +21,6 @@ const logger = createTimberlogs({
   source: "my-app",
   environment: "production",
   apiKey: "your-api-key",
-  endpoint: "https://your-timberlogs-endpoint.com/api/logs",
 });
 
 // Log messages at different levels
@@ -48,10 +47,7 @@ const logger = createTimberlogs({
   // Required
   source: "my-app",           // Your application name
   environment: "production",   // development | staging | production
-
-  // HTTP Transport (optional)
-  apiKey: "your-api-key",
-  endpoint: "https://...",
+  apiKey: "your-api-key",     // Your Timberlogs API key
 
   // Optional
   version: "1.0.0",            // App version

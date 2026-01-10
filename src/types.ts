@@ -22,8 +22,6 @@ export interface TimberlogsConfig {
   environment: Environment;
   /** API key for authentication (required for HTTP transport) */
   apiKey?: string;
-  /** HTTP endpoint for sending logs */
-  endpoint?: string;
   /** Application version */
   version?: string;
   /** Default user ID for logs */
