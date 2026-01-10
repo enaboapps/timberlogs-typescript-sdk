@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { TimberlogsClient, createTimberlogs } from "./client";
+import { TimberlogsClient, createTimberlogs, Flow } from "./client";
 
 describe("TimberlogsClient", () => {
   beforeEach(() => {
@@ -356,6 +356,115 @@ describe("TimberlogsClient", () => {
       expect((client as any).config.batchSize).toBe(50);
       expect((client as any).config.flushInterval).toBe(10000);
       expect((client as any).config.minLevel).toBe("error");
+    });
+  });
+
+  describe("flow", () => {
+    it("creates a flow with auto-generated id", () => {
+      const client = createTimberlogs({
+        source: "test-app",
+        environment: "production",
+      });
+
+      const flow = client.flow("checkout");
+
+      expect(flow).toBeInstanceOf(Flow);
+      expect(flow.name).toBe("checkout");
+      expect(flow.id).toMatch(/^checkout-[a-z0-9]{8}$/);
+    });
+
+    it("generates unique ids for each flow", () => {
+      const client = createTimberlogs({
+        source: "test-app",
+        environment: "production",
+      });
+
+      const flow1 = client.flow("checkout");
+      const flow2 = client.flow("checkout");
+
+      expect(flow1.id).not.toBe(flow2.id);
+    });
+
+    it("logs with flowId and auto-incrementing stepIndex", () => {
+      const client = createTimberlogs({
+        source: "test-app",
+        environment: "production",
+      });
+
+      const flow = client.flow("checkout");
+      flow.info("Step 1");
+      flow.info("Step 2");
+      flow.info("Step 3");
+
+      const queue = (client as any).queue;
+      expect(queue).toHaveLength(3);
+      expect(queue[0].flowId).toBe(flow.id);
+      expect(queue[0].stepIndex).toBe(0);
+      expect(queue[1].stepIndex).toBe(1);
+      expect(queue[2].stepIndex).toBe(2);
+    });
+
+    it("supports all log levels", () => {
+      const client = createTimberlogs({
+        source: "test-app",
+        environment: "production",
+      });
+
+      const flow = client.flow("test");
+      flow.debug("Debug");
+      flow.info("Info");
+      flow.warn("Warn");
+      flow.error("Error");
+
+      const queue = (client as any).queue;
+      expect(queue).toHaveLength(4);
+      expect(queue[0].level).toBe("debug");
+      expect(queue[1].level).toBe("info");
+      expect(queue[2].level).toBe("warn");
+      expect(queue[3].level).toBe("error");
+    });
+
+    it("supports data and tags", () => {
+      const client = createTimberlogs({
+        source: "test-app",
+        environment: "production",
+      });
+
+      const flow = client.flow("checkout");
+      flow.info("Processing", { orderId: "123" }, { tags: ["payment"] });
+
+      const queue = (client as any).queue;
+      expect(queue[0].data).toEqual({ orderId: "123" });
+      expect(queue[0].tags).toEqual(["payment"]);
+    });
+
+    it("handles Error objects in error()", () => {
+      const client = createTimberlogs({
+        source: "test-app",
+        environment: "production",
+      });
+
+      const flow = client.flow("checkout");
+      const error = new Error("Payment failed");
+      flow.error("Payment error", error);
+
+      const queue = (client as any).queue;
+      expect(queue[0].errorName).toBe("Error");
+      expect(queue[0].data).toEqual({ message: "Payment failed" });
+      expect(queue[0].errorStack).toBeDefined();
+    });
+
+    it("allows chaining", () => {
+      const client = createTimberlogs({
+        source: "test-app",
+        environment: "production",
+      });
+
+      const flow = client.flow("checkout");
+      const result = flow.info("Step 1").info("Step 2").warn("Warning");
+
+      expect(result).toBe(flow);
+      expect((client as any).queue).toHaveLength(3);
     });
   });
 });

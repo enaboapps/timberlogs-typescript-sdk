@@ -11,6 +11,8 @@ export interface LogEntry {
   errorName?: string;
   errorStack?: string;
   tags?: string[];
+  flowId?: string;
+  stepIndex?: number;
 }
 
 export interface TimberlogsConfig {
@@ -58,6 +60,8 @@ export interface CreateLogArgs {
   errorName?: string;
   errorStack?: string;
   tags?: string[];
+  flowId?: string;
+  stepIndex?: number;
 }
 
 export interface BatchLogArgs {

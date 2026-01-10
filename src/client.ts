@@ -13,6 +13,108 @@ const DEFAULT_RETRY = {
   maxDelayMs: 30000,
 };
 
+/**
+ * Generate a short random ID for flow tracking
+ */
+function generateFlowId(name: string): string {
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let suffix = "";
+  for (let i = 0; i < 8; i++) {
+    suffix += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return `${name}-${suffix}`;
+}
+
+/**
+ * A Flow tracks a sequence of related log entries
+ *
+ * @example
+ * const flow = logger.flow("checkout");
+ * flow.info("User started checkout");
+ * flow.info("Processing payment");
+ * flow.info("Order confirmed");
+ */
+export class Flow {
+  /** The unique identifier for this flow instance */
+  readonly id: string;
+  /** The human-readable name of the flow */
+  readonly name: string;
+  private stepIndex = 0;
+  private client: TimberlogsClient;
+
+  constructor(name: string, client: TimberlogsClient) {
+    this.name = name;
+    this.id = generateFlowId(name);
+    this.client = client;
+  }
+
+  /**
+   * Log a debug message in this flow
+   */
+  debug(message: string, data?: Record<string, unknown>, options?: { tags?: string[] }): this {
+    return this.logWithLevel("debug", message, data, options);
+  }
+
+  /**
+   * Log an info message in this flow
+   */
+  info(message: string, data?: Record<string, unknown>, options?: { tags?: string[] }): this {
+    return this.logWithLevel("info", message, data, options);
+  }
+
+  /**
+   * Log a warning message in this flow
+   */
+  warn(message: string, data?: Record<string, unknown>, options?: { tags?: string[] }): this {
+    return this.logWithLevel("warn", message, data, options);
+  }
+
+  /**
+   * Log an error message in this flow
+   */
+  error(message: string, error?: Error | Record<string, unknown>, options?: { tags?: string[] }): this {
+    if (error instanceof Error) {
+      this.client.log({
+        level: "error",
+        message,
+        errorName: error.name,
+        errorStack: error.stack,
+        data: { message: error.message },
+        tags: options?.tags,
+        flowId: this.id,
+        stepIndex: this.stepIndex++,
+      });
+    } else {
+      this.client.log({
+        level: "error",
+        message,
+        data: error,
+        tags: options?.tags,
+        flowId: this.id,
+        stepIndex: this.stepIndex++,
+      });
+    }
+    return this;
+  }
+
+  private logWithLevel(
+    level: LogLevel,
+    message: string,
+    data?: Record<string, unknown>,
+    options?: { tags?: string[] }
+  ): this {
+    this.client.log({
+      level,
+      message,
+      data,
+      tags: options?.tags,
+      flowId: this.id,
+      stepIndex: this.stepIndex++,
+    });
+    return this;
+  }
+}
+
 export class TimberlogsClient {
   private config: Required<
     Pick<TimberlogsConfig, "source" | "environment" | "batchSize" | "flushInterval" | "minLevel">
@@ -100,6 +202,20 @@ export class TimberlogsClient {
   }
 
   /**
+   * Create a new flow for tracking related log entries
+   *
+   * @example
+   * const flow = logger.flow("checkout");
+   * flow.info("User started checkout");
+   * flow.info("Processing payment");
+   * flow.info("Order confirmed");
+   * console.log(flow.id); // "checkout-a7x9k2f3"
+   */
+  flow(name: string): Flow {
+    return new Flow(name, this);
+  }
+
+  /**
    * Log a debug message
    */
   debug(message: string, data?: Record<string, unknown>, options?: { tags?: string[] }) {
@@ -158,6 +274,8 @@ export class TimberlogsClient {
       errorName: entry.errorName,
       errorStack: entry.errorStack,
       tags: entry.tags,
+      flowId: entry.flowId,
+      stepIndex: entry.stepIndex,
     };
 
     this.queue.push(logArgs);
