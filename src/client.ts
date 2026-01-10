@@ -24,10 +24,9 @@ function generateFlowId(name: string): string {
   // Type-safe access to globalThis for cross-environment compatibility
   const g = globalThis as {
     crypto?: { getRandomValues?: (arr: Uint8Array) => Uint8Array };
-    require?: (id: string) => { randomBytes?: (size: number) => { [i: number]: number } };
   } & typeof globalThis;
 
-  // Try Web Crypto API (browsers and Node.js 19+)
+  // Use Web Crypto API (browsers and Node.js 15+)
   if (g.crypto?.getRandomValues) {
     const bytes = new Uint8Array(length);
     g.crypto.getRandomValues(bytes);
@@ -35,28 +34,9 @@ function generateFlowId(name: string): string {
       suffix += chars[bytes[i] % chars.length];
     }
   } else {
-    // Try Node.js crypto module
-    let nodeBytes: { [i: number]: number } | null = null;
-    try {
-      if (g.require) {
-        const nodeCrypto = g.require("crypto");
-        if (nodeCrypto?.randomBytes) {
-          nodeBytes = nodeCrypto.randomBytes(length);
-        }
-      }
-    } catch {
-      // require not available or crypto module not found
-    }
-
-    if (nodeBytes) {
-      for (let i = 0; i < length; i++) {
-        suffix += chars[nodeBytes[i] % chars.length];
-      }
-    } else {
-      // Fallback to Math.random (least secure, last resort)
-      for (let i = 0; i < length; i++) {
-        suffix += chars[Math.floor(Math.random() * chars.length)];
-      }
+    // Fallback to Math.random for older environments
+    for (let i = 0; i < length; i++) {
+      suffix += chars[Math.floor(Math.random() * chars.length)];
     }
   }
 
