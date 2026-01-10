@@ -14,14 +14,27 @@ const DEFAULT_RETRY = {
 };
 
 /**
- * Generate a short random ID for flow tracking
+ * Generate a short random ID for flow tracking using crypto-secure randomness
  */
 function generateFlowId(name: string): string {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  const length = 8;
   let suffix = "";
-  for (let i = 0; i < 8; i++) {
-    suffix += chars[Math.floor(Math.random() * chars.length)];
+
+  // Try Web Crypto API (works in browsers and Node.js 19+)
+  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+    const bytes = new Uint8Array(length);
+    crypto.getRandomValues(bytes);
+    for (let i = 0; i < length; i++) {
+      suffix += chars[bytes[i] % chars.length];
+    }
+  } else {
+    // Fallback for environments without Web Crypto
+    for (let i = 0; i < length; i++) {
+      suffix += chars[Math.floor(Math.random() * chars.length)];
+    }
   }
+
   return `${name}-${suffix}`;
 }
 
