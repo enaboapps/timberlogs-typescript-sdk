@@ -1,5 +1,5 @@
 {
-  "name": "timberlogs",
+  "name": "timberlogs-client",
   "version": "1.0.0",
   "description": "TypeScript SDK for Timberlogs - structured logging made simple",
   "type": "module",

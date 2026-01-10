@@ -5,17 +5,17 @@ A lightweight, flexible TypeScript SDK for structured logging with Timberlogs.
 ## Installation
 
 ```bash
-npm install timberlogs
+npm install timberlogs-client
 # or
-pnpm add timberlogs
+pnpm add timberlogs-client
 # or
-yarn add timberlogs
+yarn add timberlogs-client
 ```
 
 ## Quick Start
 
 ```typescript
-import { createTimberlogs } from "timberlogs";
+import { createTimberlogs } from "timberlogs-client";
 
 const logger = createTimberlogs({
   source: "my-app",
