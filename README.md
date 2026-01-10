@@ -111,6 +111,25 @@ logger
   .info("Logged in");
 ```
 
+### Flow Tracking
+
+Track related logs across multi-step processes:
+
+```typescript
+// Create a flow (async operation)
+const flow = await logger.flow("checkout");
+
+// All flow logs share the same flowId with auto-incrementing stepIndex
+flow.info("Started checkout", { userId: "123" });
+flow.info("Validated cart", { items: 3 });
+flow.info("Payment processed", { amount: 99.99 });
+flow.info("Order confirmed", { orderId: "ord_456" });
+
+// Access flow properties
+console.log(flow.id);   // "checkout-a1b2c3d4"
+console.log(flow.name); // "checkout"
+```
+
 ### Manual Flush
 
 ```typescript
@@ -157,6 +176,7 @@ Creates a new Timberlogs client instance.
 | `warn(message, data?, options?)` | Log a warning message |
 | `error(message, error?, options?)` | Log an error message |
 | `log(entry)` | Log with full control over entry |
+| `flow(name)` | Create a flow for tracking related logs (async) |
 | `setUserId(userId)` | Set user ID for subsequent logs |
 | `setSessionId(sessionId)` | Set session ID for subsequent logs |
 | `flush()` | Immediately send all queued logs |
