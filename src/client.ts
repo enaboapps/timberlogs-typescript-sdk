@@ -21,17 +21,42 @@ function generateFlowId(name: string): string {
   const length = 8;
   let suffix = "";
 
-  // Try Web Crypto API (works in browsers and Node.js 19+)
-  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+  // Type-safe access to globalThis for cross-environment compatibility
+  const g = globalThis as {
+    crypto?: { getRandomValues?: (arr: Uint8Array) => Uint8Array };
+    require?: (id: string) => { randomBytes?: (size: number) => { [i: number]: number } };
+  } & typeof globalThis;
+
+  // Try Web Crypto API (browsers and Node.js 19+)
+  if (g.crypto?.getRandomValues) {
     const bytes = new Uint8Array(length);
-    crypto.getRandomValues(bytes);
+    g.crypto.getRandomValues(bytes);
     for (let i = 0; i < length; i++) {
       suffix += chars[bytes[i] % chars.length];
     }
   } else {
-    // Fallback for environments without Web Crypto
-    for (let i = 0; i < length; i++) {
-      suffix += chars[Math.floor(Math.random() * chars.length)];
+    // Try Node.js crypto module
+    let nodeBytes: { [i: number]: number } | null = null;
+    try {
+      if (g.require) {
+        const nodeCrypto = g.require("crypto");
+        if (nodeCrypto?.randomBytes) {
+          nodeBytes = nodeCrypto.randomBytes(length);
+        }
+      }
+    } catch {
+      // require not available or crypto module not found
+    }
+
+    if (nodeBytes) {
+      for (let i = 0; i < length; i++) {
+        suffix += chars[nodeBytes[i] % chars.length];
+      }
+    } else {
+      // Fallback to Math.random (least secure, last resort)
+      for (let i = 0; i < length; i++) {
+        suffix += chars[Math.floor(Math.random() * chars.length)];
+      }
     }
   }
 
@@ -86,6 +111,12 @@ export class Flow {
    * Log an error message in this flow
    */
   error(message: string, error?: Error | Record<string, unknown>, options?: { tags?: string[] }): this {
+    // Only increment stepIndex if log will actually be emitted
+    if (!this.client.shouldLog("error")) {
+      return this;
+    }
+
+    const step = this.stepIndex++;
     if (error instanceof Error) {
       this.client.log({
         level: "error",
@@ -95,7 +126,7 @@ export class Flow {
         data: { message: error.message },
         tags: options?.tags,
         flowId: this.id,
-        stepIndex: this.stepIndex++,
+        stepIndex: step,
       });
     } else {
       this.client.log({
@@ -104,7 +135,7 @@ export class Flow {
         data: error,
         tags: options?.tags,
         flowId: this.id,
-        stepIndex: this.stepIndex++,
+        stepIndex: step,
       });
     }
     return this;
@@ -116,6 +147,11 @@ export class Flow {
     data?: Record<string, unknown>,
     options?: { tags?: string[] }
   ): this {
+    // Only increment stepIndex if log will actually be emitted
+    if (!this.client.shouldLog(level)) {
+      return this;
+    }
+
     this.client.log({
       level,
       message,
@@ -369,7 +405,10 @@ export class TimberlogsClient {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  private shouldLog(level: LogLevel): boolean {
+  /**
+   * Check if a log level will be emitted based on minLevel config
+   */
+  shouldLog(level: LogLevel): boolean {
     return LOG_LEVEL_PRIORITY[level] >= LOG_LEVEL_PRIORITY[this.config.minLevel];
   }
 

@@ -466,5 +466,26 @@ describe("TimberlogsClient", () => {
       expect(result).toBe(flow);
       expect((client as any).queue).toHaveLength(3);
     });
+
+    it("does not create stepIndex gaps when logs are filtered by minLevel", () => {
+      const client = createTimberlogs({
+        source: "test-app",
+        environment: "production",
+        minLevel: "warn", // Only warn and error will be emitted
+      });
+
+      const flow = client.flow("checkout");
+      flow.debug("Debug - filtered");  // Should not increment stepIndex
+      flow.info("Info - filtered");    // Should not increment stepIndex
+      flow.warn("Warn - emitted");     // stepIndex: 0
+      flow.error("Error - emitted");   // stepIndex: 1
+
+      const queue = (client as any).queue;
+      expect(queue).toHaveLength(2);
+      expect(queue[0].level).toBe("warn");
+      expect(queue[0].stepIndex).toBe(0);
+      expect(queue[1].level).toBe("error");
+      expect(queue[1].stepIndex).toBe(1);
+    });
   });
 });
