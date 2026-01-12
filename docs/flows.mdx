@@ -1,0 +1,276 @@
+---
+title: Flow Tracking
+description: Track related logs across a multi-step process with automatic flow IDs and step indexing
+---
+
+Track related logs across a multi-step process with automatic flow IDs and step indexing.
+
+## What are Flows?
+
+Flows let you group related logs together and track their sequence. This is useful for:
+
+- Multi-step processes (checkout, onboarding, data pipelines)
+- Request/response cycles
+- Background job execution
+- User journeys
+
+Each flow has:
+- **flowId**: A unique identifier (e.g., `checkout-a1b2c3d4`)
+- **stepIndex**: Auto-incrementing index showing order (0, 1, 2, ...)
+
+## Creating a Flow
+
+Use the `flow()` method to create a new flow. This is an async operation that creates the flow on the server:
+
+```typescript
+const flow = await timber.flow('checkout')
+
+flow.info('Started checkout')
+flow.info('Validated cart', { items: 3 })
+flow.info('Payment processed', { amount: 99.99 })
+flow.info('Order confirmed', { orderId: 'ord_123' })
+```
+
+This produces logs with:
+- `flowId: "checkout-a1b2c3d4"` (auto-generated)
+- `stepIndex: 0, 1, 2, 3` (auto-incrementing)
+
+## Flow Properties
+
+```typescript
+const flow = await timber.flow('user-onboarding')
+
+// Access the flow ID
+console.log(flow.id)    // "user-onboarding-x7y8z9a0"
+
+// Access the flow name
+console.log(flow.name)  // "user-onboarding"
+```
+
+## Flow Logging Methods
+
+Flows have the same logging methods as the main client:
+
+```typescript
+const flow = await timber.flow('data-pipeline')
+
+flow.debug('Debug info', { stage: 'init' })
+flow.info('Processing started')
+flow.warn('Slow operation', { duration: 5000 })
+flow.error('Processing failed', new Error('Timeout'))
+```
+
+## Method Chaining
+
+Flow methods return the flow for chaining:
+
+```typescript
+const flow = await timber.flow('checkout')
+flow
+  .info('Cart validated')
+  .info('Payment authorized')
+  .info('Order created')
+  .info('Confirmation sent')
+```
+
+## Real-World Examples
+
+### E-commerce Checkout
+
+```typescript
+async function processCheckout(cart: Cart, user: User) {
+  const flow = await timber.flow('checkout')
+
+  flow.info('Checkout started', {
+    userId: user.id,
+    itemCount: cart.items.length
+  })
+
+  // Validate cart
+  const validation = await validateCart(cart)
+  if (!validation.valid) {
+    flow.warn('Cart validation failed', { errors: validation.errors })
+    return { success: false }
+  }
+  flow.info('Cart validated')
+
+  // Process payment
+  try {
+    const payment = await processPayment(cart.total, user.paymentMethod)
+    flow.info('Payment processed', {
+      transactionId: payment.id,
+      amount: cart.total
+    })
+  } catch (error) {
+    flow.error('Payment failed', error)
+    return { success: false }
+  }
+
+  // Create order
+  const order = await createOrder(cart, user)
+  flow.info('Order created', { orderId: order.id })
+
+  // Send confirmation
+  await sendConfirmationEmail(user.email, order)
+  flow.info('Confirmation sent', { email: user.email })
+
+  return { success: true, orderId: order.id }
+}
+```
+
+### API Request Lifecycle
+
+```typescript
+app.use(async (req, res, next) => {
+  const flow = await timber.flow('api-request')
+  req.flow = flow
+
+  flow.info('Request received', {
+    method: req.method,
+    path: req.path,
+    ip: req.ip,
+  })
+
+  const start = Date.now()
+
+  res.on('finish', () => {
+    flow.info('Response sent', {
+      status: res.statusCode,
+      duration: Date.now() - start,
+    })
+  })
+
+  next()
+})
+
+// In route handlers
+app.post('/users', async (req, res) => {
+  req.flow.info('Creating user', { email: req.body.email })
+
+  const user = await createUser(req.body)
+  req.flow.info('User created', { userId: user.id })
+
+  res.json(user)
+})
+```
+
+### Background Job
+
+```typescript
+async function processJob(job: Job) {
+  const flow = await timber.flow(`job-${job.type}`)
+
+  flow.info('Job started', { jobId: job.id, type: job.type })
+
+  for (const item of job.items) {
+    flow.debug('Processing item', { itemId: item.id })
+    await processItem(item)
+  }
+
+  flow.info('Job completed', {
+    jobId: job.id,
+    processedCount: job.items.length
+  })
+}
+```
+
+## Flow ID Generation
+
+Flow IDs are generated server-side using the pattern: `{name}-{random8chars}`
+
+```
+checkout-a1b2c3d4
+user-onboarding-x7y8z9ab
+api-request-mn0p1q2r
+```
+
+The server uses cryptographically secure random values (`crypto.getRandomValues`) for the suffix.
+
+## Level Filtering with Flows
+
+When using `minLevel` configuration, filtered logs don't increment the step index:
+
+```typescript
+const timber = createTimberlogs({
+  // ...
+  minLevel: 'info',
+})
+
+const flow = await timber.flow('example')
+flow.debug('Not sent')      // Filtered, stepIndex not incremented
+flow.info('First log')      // stepIndex: 0
+flow.debug('Not sent')      // Filtered, stepIndex not incremented
+flow.info('Second log')     // stepIndex: 1
+```
+
+This ensures your step indices remain sequential without gaps.
+
+## Viewing Flows in the Dashboard
+
+In the Timberlogs dashboard, you can:
+
+1. **Filter by flowId**: Search for a specific flow to see all related logs
+2. **View timeline**: See logs in sequence by stepIndex
+3. **Track duration**: Measure time between flow steps
+
+## Best Practices
+
+### Name Flows Descriptively
+
+```typescript
+// Good: Descriptive names
+await timber.flow('checkout')
+await timber.flow('user-registration')
+await timber.flow('payment-processing')
+
+// Avoid: Generic names
+await timber.flow('flow1')
+await timber.flow('process')
+```
+
+### Include Context in First Log
+
+```typescript
+const flow = await timber.flow('order-fulfillment')
+flow.info('Flow started', {
+  orderId: order.id,
+  userId: order.userId,
+  itemCount: order.items.length,
+})
+```
+
+### Log Both Success and Failure
+
+```typescript
+const flow = await timber.flow('data-sync')
+try {
+  await syncData()
+  flow.info('Sync completed successfully')
+} catch (error) {
+  flow.error('Sync failed', error)
+}
+```
+
+### Use Flows for Correlation
+
+Flows make it easy to correlate logs from different parts of your system:
+
+```typescript
+// In API handler
+const flow = await timber.flow('upload')
+flow.info('Upload started')
+
+// Pass flow ID to background job
+await queue.add('process-upload', {
+  fileId,
+  flowId: flow.id
+})
+
+// In worker, create flow with same ID manually if needed
+timber.log({
+  level: 'info',
+  message: 'Processing upload',
+  flowId: jobData.flowId,
+  stepIndex: 10, // Continue from where API left off
+})
+```

@@ -1,0 +1,181 @@
+---
+title: TypeScript SDK
+description: The official Timberlogs SDK for TypeScript and JavaScript applications
+---
+
+The official Timberlogs SDK for TypeScript and JavaScript applications.
+
+## Installation
+
+```bash
+npm install timberlogs-client
+```
+
+## Basic Usage
+
+```typescript
+import { createTimberlogs } from 'timberlogs-client'
+
+const timber = createTimberlogs({
+  source: 'my-app',
+  environment: 'production',
+  apiKey: process.env.TIMBER_API_KEY,
+})
+
+timber.info('Hello, Timberlogs!')
+```
+
+## Exports
+
+The SDK exports the following:
+
+```typescript
+import {
+  createTimberlogs,  // Factory function
+  TimberlogsClient,  // Client class
+  Flow,              // Flow class for tracking
+} from 'timberlogs-client'
+
+// Types
+import type {
+  LogLevel,          // 'debug' | 'info' | 'warn' | 'error'
+  Environment,       // 'development' | 'staging' | 'production'
+  LogEntry,          // Log entry interface
+  TimberlogsConfig,  // Configuration interface
+} from 'timberlogs-client'
+```
+
+## Client Methods
+
+### `debug(message, data?, options?)`
+
+Log a debug message.
+
+```typescript
+timber.debug('Cache hit', { key: 'user:123' })
+```
+
+### `info(message, data?, options?)`
+
+Log an informational message.
+
+```typescript
+timber.info('User signed in', { userId: 'user_123' })
+```
+
+### `warn(message, data?, options?)`
+
+Log a warning.
+
+```typescript
+timber.warn('Deprecated API called', { endpoint: '/v1/old' })
+```
+
+### `error(message, error?, options?)`
+
+Log an error. Accepts either an `Error` object or data object.
+
+```typescript
+// With Error object (extracts name, message, stack)
+timber.error('Request failed', new Error('Network timeout'))
+
+// With data object
+timber.error('Validation failed', { field: 'email', reason: 'invalid' })
+```
+
+### `log(entry)`
+
+Low-level logging method with full control.
+
+```typescript
+timber.log({
+  level: 'info',
+  message: 'Custom log',
+  data: { custom: 'data' },
+  userId: 'user_123',
+  sessionId: 'sess_abc',
+  requestId: 'req_xyz',
+  tags: ['important', 'billing'],
+})
+```
+
+### `flow(name)` (async)
+
+Create a new flow for tracking related logs. This is an async operation. See [Flow Tracking](/sdk/flows).
+
+```typescript
+const flow = await timber.flow('checkout')
+flow.info('Started checkout')
+```
+
+### `setUserId(userId)`
+
+Set the default user ID for subsequent logs.
+
+```typescript
+timber.setUserId('user_123')
+```
+
+### `setSessionId(sessionId)`
+
+Set the default session ID for subsequent logs.
+
+```typescript
+timber.setSessionId('sess_abc')
+```
+
+### `flush()`
+
+Immediately send all queued logs.
+
+```typescript
+await timber.flush()
+```
+
+### `disconnect()`
+
+Flush logs and stop the auto-flush timer.
+
+```typescript
+await timber.disconnect()
+```
+
+## Log Entry Interface
+
+```typescript
+interface LogEntry {
+  level: 'debug' | 'info' | 'warn' | 'error'
+  message: string
+  data?: Record<string, unknown>
+  userId?: string
+  sessionId?: string
+  requestId?: string
+  errorName?: string
+  errorStack?: string
+  tags?: string[]
+  flowId?: string
+  stepIndex?: number
+}
+```
+
+## Options Object
+
+All logging methods accept an optional `options` object:
+
+```typescript
+timber.info('Message', { data: 'here' }, {
+  tags: ['important', 'billing'],
+})
+```
+
+## Chaining
+
+All methods return `this` for chaining:
+
+```typescript
+timber
+  .setUserId('user_123')
+  .setSessionId('sess_abc')
+  .info('User action')
+  .debug('Debug info')
+```
