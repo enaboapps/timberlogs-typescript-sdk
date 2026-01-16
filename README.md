@@ -202,6 +202,10 @@ interface LogEntry {
 }
 ```
 
+## Support
+
+Questions or feedback? Email us at [timberlogs@proton.me](mailto:timberlogs@proton.me)
+
 ## License
 
 MIT
