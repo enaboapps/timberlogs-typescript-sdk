@@ -199,6 +199,8 @@ interface LogEntry {
   errorName?: string;
   errorStack?: string;
   tags?: string[];
+  flowId?: string;
+  stepIndex?: number;
 }
 ```
 
