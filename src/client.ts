@@ -16,6 +16,41 @@ const DEFAULT_RETRY = {
 const TIMBERLOGS_ENDPOINT = "https://timberlogs-ingest.enaboapps.workers.dev/v1/logs";
 const TIMBERLOGS_FLOWS_ENDPOINT = "https://timberlogs-ingest.enaboapps.workers.dev/v1/flows";
 
+function checkStr(value: string | undefined, name: string, maxLen: number): void {
+  if (value !== undefined && value.length > maxLen) {
+    throw new Error(`${name} exceeds ${maxLen} characters: ${value.length}`);
+  }
+}
+
+function validateLogEntry(entry: LogEntry): void {
+  if (!entry.message || entry.message.length === 0) {
+    throw new Error("message must not be empty");
+  }
+  checkStr(entry.message, "message", 10_000);
+  checkStr(entry.errorName, "errorName", 200);
+  checkStr(entry.errorStack, "errorStack", 10_000);
+  checkStr(entry.userId, "userId", 100);
+  checkStr(entry.sessionId, "sessionId", 100);
+  checkStr(entry.requestId, "requestId", 100);
+  checkStr(entry.flowId, "flowId", 50);
+  checkStr(entry.dataset, "dataset", 50);
+
+  if (entry.stepIndex !== undefined && (entry.stepIndex < 0 || entry.stepIndex > 1000)) {
+    throw new Error(`stepIndex must be 0-1000, got ${entry.stepIndex}`);
+  }
+
+  if (entry.tags) {
+    if (entry.tags.length > 20) {
+      throw new Error(`tags must have at most 20 items, got ${entry.tags.length}`);
+    }
+    for (let i = 0; i < entry.tags.length; i++) {
+      if (entry.tags[i].length > 50) {
+        throw new Error(`tags[${i}] exceeds 50 characters: ${entry.tags[i].length}`);
+      }
+    }
+  }
+}
+
 /**
  * A Flow tracks a sequence of related log entries
  *
@@ -136,6 +171,13 @@ export class TimberlogsClient {
   private useHttp: boolean = false;
 
   constructor(config: TimberlogsConfig) {
+    if (config.batchSize !== undefined && (config.batchSize < 1 || !Number.isInteger(config.batchSize))) {
+      throw new Error("batchSize must be a positive integer");
+    }
+    if (config.flushInterval !== undefined && config.flushInterval < 0) {
+      throw new Error("flushInterval must be non-negative");
+    }
+
     this.config = {
       source: config.source,
       environment: config.environment,
@@ -281,6 +323,8 @@ export class TimberlogsClient {
     if (!this.shouldLog(entry.level)) {
       return this;
     }
+
+    validateLogEntry(entry);
 
     const logArgs: Omit<CreateLogArgs, "apiKey"> = {
       level: entry.level,
