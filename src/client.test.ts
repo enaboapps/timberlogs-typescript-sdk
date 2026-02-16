@@ -587,4 +587,104 @@ describe("TimberlogsClient", () => {
       await expect(client.flow("checkout")).rejects.toThrow("API key required to create flows");
     });
   });
+
+  describe("validation", () => {
+    describe("config validation", () => {
+      it("rejects batchSize of 0", () => {
+        expect(() => createTimberlogs({
+          source: "test-app",
+          environment: "production",
+          batchSize: 0,
+        })).toThrow("batchSize must be a positive integer");
+      });
+
+      it("rejects negative batchSize", () => {
+        expect(() => createTimberlogs({
+          source: "test-app",
+          environment: "production",
+          batchSize: -1,
+        })).toThrow("batchSize must be a positive integer");
+      });
+
+      it("rejects negative flushInterval", () => {
+        expect(() => createTimberlogs({
+          source: "test-app",
+          environment: "production",
+          flushInterval: -1,
+        })).toThrow("flushInterval must be non-negative");
+      });
+    });
+
+    describe("payload validation", () => {
+      it("rejects empty message", () => {
+        const client = createTimberlogs({
+          source: "test-app",
+          environment: "production",
+        });
+
+        expect(() => client.log({ level: "info", message: "" })).toThrow("message must not be empty");
+      });
+
+      it("rejects message over 10000 chars", () => {
+        const client = createTimberlogs({
+          source: "test-app",
+          environment: "production",
+        });
+
+        expect(() => client.log({ level: "info", message: "x".repeat(10001) })).toThrow("message exceeds 10000 characters");
+      });
+
+      it("rejects too many tags", () => {
+        const client = createTimberlogs({
+          source: "test-app",
+          environment: "production",
+        });
+
+        const tags = Array.from({ length: 21 }, (_, i) => `tag${i}`);
+        expect(() => client.log({ level: "info", message: "test", tags })).toThrow("tags must have at most 20 items");
+      });
+
+      it("rejects long tag", () => {
+        const client = createTimberlogs({
+          source: "test-app",
+          environment: "production",
+        });
+
+        expect(() => client.log({ level: "info", message: "test", tags: ["x".repeat(51)] })).toThrow("tags[0] exceeds 50 characters");
+      });
+
+      it("rejects long userId", () => {
+        const client = createTimberlogs({
+          source: "test-app",
+          environment: "production",
+        });
+
+        expect(() => client.log({ level: "info", message: "test", userId: "x".repeat(101) })).toThrow("userId exceeds 100 characters");
+      });
+
+      it("rejects invalid stepIndex", () => {
+        const client = createTimberlogs({
+          source: "test-app",
+          environment: "production",
+        });
+
+        expect(() => client.log({ level: "info", message: "test", stepIndex: 1001 })).toThrow("stepIndex must be 0-1000");
+      });
+
+      it("accepts valid payload", () => {
+        const client = createTimberlogs({
+          source: "test-app",
+          environment: "production",
+        });
+
+        expect(() => client.log({
+          level: "info",
+          message: "test",
+          tags: ["tag1", "tag2"],
+          userId: "user-123",
+          stepIndex: 500,
+        })).not.toThrow();
+      });
+    });
+  });
 });
