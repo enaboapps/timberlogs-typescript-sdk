@@ -113,7 +113,7 @@ logger
 
 ### Flow Tracking
 
-Track related logs across multi-step processes:
+Track related logs across multi-step processes. **Note:** Flow tracking requires an `apiKey` to be configured, as flow IDs are generated server-side.
 
 ```typescript
 // Create a flow (async operation)
