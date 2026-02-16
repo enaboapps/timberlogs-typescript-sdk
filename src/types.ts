@@ -15,6 +15,8 @@ export interface LogEntry {
   stepIndex?: number;
   dataset?: string;
   timestamp?: string;
+  ipAddress?: string;
+  country?: string;
 }
 
 export interface TimberlogsConfig {
@@ -66,6 +68,8 @@ export interface CreateLogArgs {
   stepIndex?: number;
   dataset?: string;
   timestamp?: string;
+  ipAddress?: string;
+  country?: string;
 }
 
 export interface BatchLogArgs {

@@ -383,6 +383,19 @@ describe("TimberlogsClient", () => {
     });
   });
 
+  describe("ipAddress and country", () => {
+    it("includes ipAddress and country in log entry", () => {
+      const client = createTimberlogs({
+        source: "test-app",
+        environment: "production",
+      });
+
+      client.log({ level: "info", message: "Test", ipAddress: "1.2.3.4", country: "US" });
+      expect((client as any).queue[0].ipAddress).toBe("1.2.3.4");
+      expect((client as any).queue[0].country).toBe("US");
+    });
+  });
+
   describe("config defaults", () => {
     it("uses default config values", () => {
       const client = createTimberlogs({
