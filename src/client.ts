@@ -125,6 +125,7 @@ export class TimberlogsClient {
     version?: string;
     userId?: string;
     sessionId?: string;
+    dataset?: string;
     onError?: (error: Error) => void;
     retry: Required<NonNullable<TimberlogsConfig["retry"]>>;
   };
@@ -142,6 +143,7 @@ export class TimberlogsClient {
       version: config.version,
       userId: config.userId,
       sessionId: config.sessionId,
+      dataset: config.dataset,
       batchSize: config.batchSize ?? 10,
       flushInterval: config.flushInterval ?? 5000,
       minLevel: config.minLevel ?? "debug",
@@ -295,6 +297,8 @@ export class TimberlogsClient {
       tags: entry.tags,
       flowId: entry.flowId,
       stepIndex: entry.stepIndex,
+      dataset: entry.dataset ?? this.config.dataset,
+      timestamp: entry.timestamp,
     };
 
     this.queue.push(logArgs);

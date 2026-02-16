@@ -13,6 +13,8 @@ export interface LogEntry {
   tags?: string[];
   flowId?: string;
   stepIndex?: number;
+  dataset?: string;
+  timestamp?: string;
 }
 
 export interface TimberlogsConfig {
@@ -28,6 +30,8 @@ export interface TimberlogsConfig {
   userId?: string;
   /** Default session ID for logs */
   sessionId?: string;
+  /** Default dataset for log routing */
+  dataset?: string;
   /** Number of logs to batch before sending (default: 10) */
   batchSize?: number;
   /** Interval in ms to flush logs (default: 5000) */
@@ -60,6 +64,8 @@ export interface CreateLogArgs {
   tags?: string[];
   flowId?: string;
   stepIndex?: number;
+  dataset?: string;
+  timestamp?: string;
 }
 
 export interface BatchLogArgs {

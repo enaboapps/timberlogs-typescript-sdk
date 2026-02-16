@@ -349,6 +349,40 @@ describe("TimberlogsClient", () => {
     });
   });
 
+  describe("dataset and timestamp", () => {
+    it("includes config-level dataset in logs", () => {
+      const client = createTimberlogs({
+        source: "test-app",
+        environment: "production",
+        dataset: "analytics",
+      });
+
+      client.info("Test message");
+      expect((client as any).queue[0].dataset).toBe("analytics");
+    });
+
+    it("allows entry-level dataset to override config", () => {
+      const client = createTimberlogs({
+        source: "test-app",
+        environment: "production",
+        dataset: "default",
+      });
+
+      client.log({ level: "info", message: "Test", dataset: "custom" });
+      expect((client as any).queue[0].dataset).toBe("custom");
+    });
+
+    it("includes timestamp in log entry", () => {
+      const client = createTimberlogs({
+        source: "test-app",
+        environment: "production",
+      });
+
+      client.log({ level: "info", message: "Test", timestamp: "2025-01-01T00:00:00Z" });
+      expect((client as any).queue[0].timestamp).toBe("2025-01-01T00:00:00Z");
+    });
+  });
+
   describe("config defaults", () => {
     it("uses default config values", () => {
       const client = createTimberlogs({
