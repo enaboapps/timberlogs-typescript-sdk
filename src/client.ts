@@ -76,7 +76,7 @@ export class Flow {
         message,
         errorName: error.name,
         errorStack: error.stack,
-        data: { message: error.message },
+        data: { message: error.message ?? "Unknown error" },
         tags: options?.tags,
         flowId: this.id,
         stepIndex: step,
@@ -265,7 +265,7 @@ export class TimberlogsClient {
         message,
         errorName: error.name,
         errorStack: error.stack,
-        data: { message: error.message },
+        data: { message: error.message ?? "Unknown error" },
         tags: options?.tags,
       });
     }

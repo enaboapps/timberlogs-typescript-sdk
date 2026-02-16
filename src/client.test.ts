@@ -83,6 +83,23 @@ describe("TimberlogsClient", () => {
       expect((client as any).queue[0].errorStack).toBeDefined();
     });
 
+    it("handles Error objects with undefined message", () => {
+      const client = createTimberlogs({
+        source: "test-app",
+        environment: "production",
+      });
+
+      const error = new Error();
+      (error as any).message = undefined;
+      client.error("Error occurred", error);
+
+      expect((client as any).queue[0]).toMatchObject({
+        level: "error",
+        message: "Error occurred",
+        data: { message: "Unknown error" },
+      });
+    });
+
     it("queues error logs with data object", () => {
       const client = createTimberlogs({
         source: "test-app",
