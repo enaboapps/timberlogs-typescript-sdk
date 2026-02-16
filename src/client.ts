@@ -343,6 +343,8 @@ export class TimberlogsClient {
       stepIndex: entry.stepIndex,
       dataset: entry.dataset ?? this.config.dataset,
       timestamp: entry.timestamp,
+      ipAddress: entry.ipAddress,
+      country: entry.country,
     };
 
     this.queue.push(logArgs);
