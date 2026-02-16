@@ -700,4 +700,193 @@ describe("TimberlogsClient", () => {
       });
     });
   });
+
+  describe("HTTP transport", () => {
+    beforeEach(() => {
+      vi.stubGlobal("fetch", vi.fn());
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("sends logs via HTTP with correct headers and payload", async () => {
+      (fetch as any).mockResolvedValueOnce({ ok: true });
+
+      const client = createTimberlogs({
+        source: "test-app",
+        environment: "production",
+        apiKey: "tb_test_key",
+      });
+
+      client.info("HTTP test");
+      await client.flush();
+
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/v1/logs"),
+        expect.objectContaining({
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-API-Key": "tb_test_key",
+          },
+        })
+      );
+
+      const body = JSON.parse((fetch as any).mock.calls[0][1].body);
+      expect(body.logs[0]).toMatchObject({
+        level: "info",
+        message: "HTTP test",
+        source: "test-app",
+      });
+    });
+
+    it("retries on fetch failure", async () => {
+      (fetch as any)
+        .mockRejectedValueOnce(new Error("Network error"))
+        .mockRejectedValueOnce(new Error("Network error"))
+        .mockResolvedValueOnce({ ok: true });
+
+      const client = createTimberlogs({
+        source: "test-app",
+        environment: "production",
+        apiKey: "tb_test_key",
+        retry: { maxRetries: 3, initialDelayMs: 10, maxDelayMs: 100 },
+      });
+
+      client.info("Retry test");
+      const flushPromise = client.flush();
+
+      // Advance timers for retry delays
+      await vi.advanceTimersByTimeAsync(10);
+      await vi.advanceTimersByTimeAsync(20);
+
+      await flushPromise;
+
+      // 1 initial + 2 retries = 3 calls
+      expect(fetch).toHaveBeenCalledTimes(3);
+      expect((client as any).queue).toHaveLength(0);
+    });
+
+    it("retries on non-ok HTTP response", async () => {
+      (fetch as any)
+        .mockResolvedValueOnce({ ok: false, status: 500, text: async () => "Server error" })
+        .mockResolvedValueOnce({ ok: true });
+
+      const client = createTimberlogs({
+        source: "test-app",
+        environment: "production",
+        apiKey: "tb_test_key",
+        retry: { maxRetries: 3, initialDelayMs: 10, maxDelayMs: 100 },
+      });
+
+      client.info("Retry test");
+      const flushPromise = client.flush();
+
+      await vi.advanceTimersByTimeAsync(10);
+
+      await flushPromise;
+
+      expect(fetch).toHaveBeenCalledTimes(2);
+    });
+
+    it("re-queues logs after all retries exhausted", async () => {
+      const onError = vi.fn();
+      (fetch as any).mockRejectedValue(new Error("Network error"));
+
+      const client = createTimberlogs({
+        source: "test-app",
+        environment: "production",
+        apiKey: "tb_test_key",
+        retry: { maxRetries: 2, initialDelayMs: 10, maxDelayMs: 100 },
+        onError,
+      });
+
+      client.info("Will fail");
+      const flushPromise = client.flush();
+
+      // Advance through all retry delays
+      await vi.advanceTimersByTimeAsync(10);
+      await vi.advanceTimersByTimeAsync(20);
+
+      await flushPromise;
+
+      // 1 initial + 2 retries = 3 attempts
+      expect(fetch).toHaveBeenCalledTimes(3);
+      expect(onError).toHaveBeenCalled();
+      expect((client as any).queue).toHaveLength(1);
+    });
+
+    it("uses exponential backoff with max delay cap", async () => {
+      const sleepSpy = vi.spyOn(TimberlogsClient.prototype as any, "sleep").mockResolvedValue(undefined);
+      (fetch as any).mockRejectedValue(new Error("Network error"));
+
+      const onError = vi.fn();
+      const client = createTimberlogs({
+        source: "test-app",
+        environment: "production",
+        apiKey: "tb_test_key",
+        retry: { maxRetries: 3, initialDelayMs: 100, maxDelayMs: 500 },
+        onError,
+      });
+
+      client.info("Backoff test");
+      await client.flush();
+
+      // 3 retries = 3 sleep calls
+      expect(sleepSpy).toHaveBeenCalledTimes(3);
+      expect(sleepSpy).toHaveBeenNthCalledWith(1, 100);
+      expect(sleepSpy).toHaveBeenNthCalledWith(2, 200);
+      expect(sleepSpy).toHaveBeenNthCalledWith(3, 400);
+
+      sleepSpy.mockRestore();
+    });
+  });
+
+  describe("flush timer", () => {
+    beforeEach(() => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("auto-flushes on interval when apiKey is set", async () => {
+      const client = createTimberlogs({
+        source: "test-app",
+        environment: "production",
+        apiKey: "tb_test_key",
+        flushInterval: 5000,
+      });
+
+      client.info("Timer test");
+      expect(fetch).not.toHaveBeenCalled();
+
+      // Advance past flush interval
+      await vi.advanceTimersByTimeAsync(5000);
+
+      expect(fetch).toHaveBeenCalled();
+
+      await client.disconnect();
+    });
+
+    it("stops auto-flush on disconnect", async () => {
+      const client = createTimberlogs({
+        source: "test-app",
+        environment: "production",
+        apiKey: "tb_test_key",
+        flushInterval: 5000,
+      });
+
+      await client.disconnect();
+
+      client.info("After disconnect");
+      await vi.advanceTimersByTimeAsync(10000);
+
+      // Only the disconnect flush should have been called, not the timer
+      // The log after disconnect won't be flushed by timer
+      expect((client as any).flushTimer).toBeNull();
+    });
+  });
 });
