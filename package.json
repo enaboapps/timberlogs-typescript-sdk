@@ -1,6 +1,6 @@
 {
   "name": "timberlogs-client",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "TypeScript SDK for Timberlogs - structured logging made simple",
   "type": "module",
   "main": "./dist/index.js",
