@@ -38,7 +38,7 @@ logger.error("Payment failed", new Error("Insufficient funds"));
 - **Automatic batching**: Efficiently send logs in batches
 - **Retry with backoff**: Automatic retries on failure
 - **User/Session tracking**: Track logs by user and session
-- **Flexible transport**: HTTP or custom backend integration
+- **Flexible transport**: HTTP transport with automatic retries
 
 ## Configuration
 
@@ -140,25 +140,6 @@ await logger.flush();
 await logger.disconnect();
 ```
 
-### Custom Backend Integration
-
-```typescript
-const logger = createTimberlogs({
-  source: "my-app",
-  environment: "production",
-});
-
-// Connect to your own backend functions
-logger.connect({
-  createLog: async (args) => {
-    // Your implementation
-  },
-  createBatchLogs: async (args) => {
-    // Your implementation
-  },
-});
-```
-
 ## API Reference
 
 ### `createTimberlogs(config)`
@@ -181,7 +162,6 @@ Creates a new Timberlogs client instance.
 | `setSessionId(sessionId)` | Set session ID for subsequent logs |
 | `flush()` | Immediately send all queued logs |
 | `disconnect()` | Flush and stop the client |
-| `connect(mutations)` | Connect to custom backend |
 
 ### Types
 
@@ -203,6 +183,13 @@ interface LogEntry {
   stepIndex?: number;
 }
 ```
+
+## Releasing
+
+1. Bump the version in `package.json`
+2. Commit and push to `main`
+3. Create a GitHub release with tag `vX.Y.Z` (e.g., `v1.3.1`)
+4. The `publish.yml` workflow automatically runs tests, builds, and publishes to npm via OIDC trusted publishing
 
 ## Support
 
