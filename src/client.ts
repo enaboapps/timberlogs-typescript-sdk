@@ -1,4 +1,4 @@
-import type { LogLevel, LogEntry, TimberlogsConfig, CreateLogArgs, BatchLogArgs } from "./types";
+import type { LogLevel, LogEntry, TimberlogsConfig, CreateLogArgs } from "./types";
 
 const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
   debug: 0,
@@ -166,9 +166,6 @@ export class TimberlogsClient {
   };
   private queue: Omit<CreateLogArgs, "apiKey">[] = [];
   private flushTimer: ReturnType<typeof setInterval> | null = null;
-  private createLogFn: ((args: CreateLogArgs) => Promise<unknown>) | null = null;
-  private createBatchLogsFn: ((args: BatchLogArgs) => Promise<unknown>) | null = null;
-  private useHttp: boolean = false;
 
   constructor(config: TimberlogsConfig) {
     if (config.batchSize !== undefined && (config.batchSize < 1 || !Number.isInteger(config.batchSize))) {
@@ -199,34 +196,16 @@ export class TimberlogsClient {
 
     // Auto-start HTTP transport if apiKey provided
     if (config.apiKey) {
-      this.useHttp = true;
       this.startAutoFlush();
     }
   }
 
   /**
-   * Connect the client to custom mutation functions
-   * Use this when you have direct backend access (e.g., Convex)
-   */
-  connect(mutations: {
-    createLog: (args: CreateLogArgs) => Promise<unknown>;
-    createBatchLogs: (args: BatchLogArgs) => Promise<unknown>;
-  }) {
-    this.createLogFn = mutations.createLog;
-    this.createBatchLogsFn = mutations.createBatchLogs;
-    this.useHttp = false;
-    this.startAutoFlush();
-    return this;
-  }
-
-  /**
-   * Disconnect and flush remaining logs
+   * Flush remaining logs and stop the client
    */
   async disconnect() {
     this.stopAutoFlush();
     await this.flush();
-    this.createLogFn = null;
-    this.createBatchLogsFn = null;
   }
 
   /**
@@ -366,13 +345,7 @@ export class TimberlogsClient {
     this.queue = [];
 
     try {
-      if (this.useHttp) {
-        await this.sendHttpBatch(logs);
-      } else if (logs.length === 1 && this.createLogFn) {
-        await this.createLogFn({ ...logs[0], apiKey: this.config.apiKey });
-      } else if (this.createBatchLogsFn) {
-        await this.createBatchLogsFn({ apiKey: this.config.apiKey, logs });
-      }
+      await this.sendHttpBatch(logs);
     } catch (error) {
       this.handleError(error as Error);
       // Re-queue failed logs

@@ -231,121 +231,26 @@ describe("TimberlogsClient", () => {
     });
   });
 
-  describe("connect", () => {
-    it("uses createLog for single log", async () => {
-      const mockCreateLog = vi.fn().mockResolvedValue(undefined);
-      const mockCreateBatchLogs = vi.fn().mockResolvedValue(undefined);
-
-      const client = createTimberlogs({
-        source: "test-app",
-        environment: "production",
-      });
-
-      client.connect({
-        createLog: mockCreateLog,
-        createBatchLogs: mockCreateBatchLogs,
-      });
-
-      client.info("Single log");
-      await client.flush();
-
-      expect(mockCreateLog).toHaveBeenCalledWith(
-        expect.objectContaining({
-          level: "info",
-          message: "Single log",
-        })
-      );
-      expect(mockCreateBatchLogs).not.toHaveBeenCalled();
-    });
-
-    it("uses createBatchLogs for multiple logs", async () => {
-      const mockCreateLog = vi.fn().mockResolvedValue(undefined);
-      const mockCreateBatchLogs = vi.fn().mockResolvedValue(undefined);
-
-      const client = createTimberlogs({
-        source: "test-app",
-        environment: "production",
-      });
-
-      client.connect({
-        createLog: mockCreateLog,
-        createBatchLogs: mockCreateBatchLogs,
-      });
-
-      client.info("Log 1");
-      client.info("Log 2");
-      await client.flush();
-
-      expect(mockCreateBatchLogs).toHaveBeenCalledWith(
-        expect.objectContaining({
-          logs: expect.arrayContaining([
-            expect.objectContaining({ message: "Log 1" }),
-            expect.objectContaining({ message: "Log 2" }),
-          ]),
-        })
-      );
-      expect(mockCreateLog).not.toHaveBeenCalled();
-    });
-  });
-
   describe("disconnect", () => {
-    it("flushes remaining logs on disconnect", async () => {
-      const mockCreateLog = vi.fn().mockResolvedValue(undefined);
+    beforeEach(() => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
+    });
 
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("flushes remaining logs on disconnect", async () => {
       const client = createTimberlogs({
         source: "test-app",
         environment: "production",
-      });
-
-      client.connect({
-        createLog: mockCreateLog,
-        createBatchLogs: vi.fn(),
+        apiKey: "tb_test_key",
       });
 
       client.info("Final log");
       await client.disconnect();
 
-      expect(mockCreateLog).toHaveBeenCalled();
-    });
-  });
-
-  describe("error handling", () => {
-    it("calls onError callback on failure", async () => {
-      const onError = vi.fn();
-      const client = createTimberlogs({
-        source: "test-app",
-        environment: "production",
-        onError,
-      });
-
-      client.connect({
-        createLog: vi.fn().mockRejectedValue(new Error("Network error")),
-        createBatchLogs: vi.fn(),
-      });
-
-      client.info("Will fail");
-      await client.flush();
-
-      expect(onError).toHaveBeenCalledWith(expect.any(Error));
-    });
-
-    it("re-queues logs on failure", async () => {
-      const client = createTimberlogs({
-        source: "test-app",
-        environment: "production",
-        onError: vi.fn(),
-      });
-
-      client.connect({
-        createLog: vi.fn().mockRejectedValue(new Error("Network error")),
-        createBatchLogs: vi.fn(),
-      });
-
-      client.info("Will fail");
-      expect((client as any).queue).toHaveLength(1);
-
-      await client.flush();
-      expect((client as any).queue).toHaveLength(1);
+      expect(fetch).toHaveBeenCalled();
     });
   });
 
