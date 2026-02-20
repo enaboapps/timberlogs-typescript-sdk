@@ -6,4 +6,6 @@ export type {
   TimberlogsConfig,
   CreateLogArgs,
   BatchLogArgs,
+  FormatName,
+  IngestRawOptions,
 } from "./types";

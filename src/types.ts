@@ -76,3 +76,12 @@ export interface BatchLogArgs {
   apiKey?: string;
   logs: Omit<CreateLogArgs, "apiKey">[];
 }
+
+export type FormatName = "json" | "jsonl" | "syslog" | "text" | "csv" | "obl";
+
+export interface IngestRawOptions {
+  source?: string;
+  environment?: Environment;
+  level?: LogLevel;
+  dataset?: string;
+}

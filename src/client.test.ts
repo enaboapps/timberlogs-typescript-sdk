@@ -748,6 +748,25 @@ describe("TimberlogsClient", () => {
     });
   });
 
+  describe("ingestRaw", () => {
+    it("throws without apiKey", async () => {
+      const client = new TimberlogsClient({
+        source: "test",
+        environment: "development",
+      });
+      await expect(client.ingestRaw("data", "csv")).rejects.toThrow("apiKey");
+    });
+
+    it("throws on invalid format", async () => {
+      const client = new TimberlogsClient({
+        source: "test",
+        environment: "development",
+        apiKey: "tb_test_key",
+      });
+      await expect(client.ingestRaw("data", "invalid" as any)).rejects.toThrow("Unsupported format");
+    });
+  });
+
   describe("flush timer", () => {
     beforeEach(() => {
       vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));

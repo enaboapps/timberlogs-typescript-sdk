@@ -1,4 +1,4 @@
-import type { LogLevel, LogEntry, TimberlogsConfig, CreateLogArgs } from "./types";
+import type { LogLevel, LogEntry, TimberlogsConfig, CreateLogArgs, FormatName, IngestRawOptions } from "./types";
 
 const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
   debug: 0,
@@ -15,6 +15,17 @@ const DEFAULT_RETRY = {
 
 const TIMBERLOGS_ENDPOINT = "https://timberlogs-ingest.enaboapps.workers.dev/v1/logs";
 const TIMBERLOGS_FLOWS_ENDPOINT = "https://timberlogs-ingest.enaboapps.workers.dev/v1/flows";
+
+const FORMAT_CONTENT_TYPE: Record<FormatName, string> = {
+  json: "application/json",
+  jsonl: "application/x-ndjson",
+  syslog: "application/x-syslog",
+  text: "text/plain",
+  csv: "text/csv",
+  obl: "application/x-obl",
+};
+
+const VALID_FORMATS = new Set<string>(["json", "jsonl", "syslog", "text", "csv", "obl"]);
 
 function checkStr(value: string | undefined, name: string, maxLen: number): void {
   if (value !== undefined && value.length > maxLen) {
@@ -351,6 +362,54 @@ export class TimberlogsClient {
       // Re-queue failed logs
       this.queue.unshift(...logs);
     }
+  }
+
+  async ingestRaw(body: string, format: FormatName, options?: IngestRawOptions): Promise<void> {
+    if (!this.config.apiKey) {
+      throw new Error("HTTP transport requires apiKey");
+    }
+    if (!VALID_FORMATS.has(format)) {
+      throw new Error(`Unsupported format: ${format}`);
+    }
+
+    const params = new URLSearchParams({ format });
+    if (options?.source) params.set("source", options.source);
+    if (options?.environment) params.set("environment", options.environment);
+    if (options?.level) params.set("level", options.level);
+    if (options?.dataset) params.set("dataset", options.dataset);
+
+    const url = `${TIMBERLOGS_ENDPOINT}?${params.toString()}`;
+
+    let lastError: Error | null = null;
+    let delay = this.config.retry.initialDelayMs;
+
+    for (let attempt = 0; attempt <= this.config.retry.maxRetries; attempt++) {
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": FORMAT_CONTENT_TYPE[format],
+            "X-API-Key": this.config.apiKey,
+          },
+          body,
+        });
+
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(`HTTP ${response.status}: ${text}`);
+        }
+
+        return;
+      } catch (error) {
+        lastError = error as Error;
+        if (attempt < this.config.retry.maxRetries) {
+          await this.sleep(delay);
+          delay = Math.min(delay * 2, this.config.retry.maxDelayMs);
+        }
+      }
+    }
+
+    throw lastError;
   }
 
   /**
