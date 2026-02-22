@@ -1,7 +1,7 @@
 {
   "navigation": [
     {
-      "group": "SDKs",
+      "group": "TypeScript SDK",
       "pages": [
         "sdks/typescript",
         "sdks/configuration"
