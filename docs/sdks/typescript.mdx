@@ -1,0 +1,539 @@
+---
+title: TypeScript SDK
+description: The official Timberlogs SDK for TypeScript and JavaScript applications.
+---
+
+## Installation
+
+```bash
+npm install timberlogs-client
+```
+
+## Basic Usage
+
+```typescript
+import { createTimberlogs } from 'timberlogs-client'
+
+const timber = createTimberlogs({
+  source: 'my-app',
+  environment: 'production',
+  apiKey: process.env.TIMBER_API_KEY,
+  dataset: 'analytics', // Optional: default dataset for log routing
+})
+
+timber.info('Hello, Timberlogs!')
+```
+
+## Exports
+
+The SDK exports the following:
+
+```typescript
+import {
+  createTimberlogs,  // Factory function
+  TimberlogsClient,  // Client class
+  Flow,              // Flow class for tracking
+} from 'timberlogs-client'
+
+// Types
+import type {
+  LogLevel,          // 'debug' | 'info' | 'warn' | 'error'
+  Environment,       // 'development' | 'staging' | 'production'
+  FormatName,        // 'json' | 'jsonl' | 'syslog' | 'text' | 'csv' | 'obl'
+  IngestRawOptions,  // Options for ingestRaw()
+  LogEntry,          // Log entry interface
+  TimberlogsConfig,  // Configuration interface
+} from 'timberlogs-client'
+```
+
+## Logging Methods
+
+### `debug(message, data?, options?)`
+
+Log debug-level messages for detailed diagnostic information.
+
+```typescript
+// Simple debug
+timber.debug('Cache lookup')
+
+// With data
+timber.debug('Cache hit', {
+  key: 'user:123',
+  ttl: 3600,
+})
+
+// With tags
+timber.debug('Cache miss', { key: 'user:456' }, {
+  tags: ['cache', 'performance'],
+})
+```
+
+### `info(message, data?, options?)`
+
+Log informational messages about normal operations.
+
+```typescript
+timber.info('User signed in', {
+  userId: 'user_123',
+  method: 'oauth',
+})
+
+timber.info('Order placed', {
+  orderId: 'ord_xyz',
+  total: 99.99,
+})
+```
+
+### `warn(message, data?, options?)`
+
+Log warning conditions that might indicate a problem.
+
+```typescript
+timber.warn('Rate limit approaching', {
+  current: 950,
+  limit: 1000,
+  endpoint: '/api/users',
+})
+
+timber.warn('Deprecated API called', {
+  endpoint: '/v1/legacy',
+  recommendation: 'Use /v2/modern instead',
+})
+```
+
+### `error(message, errorOrData?, options?)`
+
+Log errors. Accepts either an `Error` object or a data object.
+
+```typescript
+// With Error object (extracts name, message, stack)
+try {
+  await riskyOperation()
+} catch (err) {
+  timber.error('Operation failed', err)
+}
+
+// With data object
+timber.error('Validation failed', {
+  field: 'email',
+  value: 'invalid',
+  reason: 'Invalid email format',
+})
+
+// With tags
+timber.error('Payment failed', error, {
+  tags: ['payments', 'critical'],
+})
+```
+
+When you pass an `Error` object, the SDK automatically extracts:
+- `errorName` — The error's class name (e.g. `TypeError`)
+- `errorStack` — The full stack trace
+- The error `message` is included in the data
+
+### `log(entry)`
+
+Low-level logging method with full control over the log entry.
+
+```typescript
+timber.log({
+  level: 'info',
+  message: 'Custom log entry',
+  data: {
+    custom: 'data',
+    nested: { value: 123 },
+  },
+  userId: 'user_123',
+  sessionId: 'sess_abc',
+  requestId: 'req_xyz',
+  tags: ['important', 'billing'],
+})
+```
+
+### Error Handling
+
+When you pass an `Error` object to `error()`, the SDK extracts structured fields:
+
+```typescript
+try {
+  await riskyOperation()
+} catch (err) {
+  timber.error('Operation failed', err)
+  // Creates a log entry with:
+  // - errorName: "TypeError" (err.name)
+  // - errorStack: "TypeError: Cannot read..." (err.stack)
+  // - message includes the error message
+}
+```
+
+### Data Object
+
+The `data` parameter accepts any JSON-serializable object:
+
+```typescript
+timber.info('Request completed', {
+  // Primitives
+  status: 200,
+  duration: 123.45,
+  cached: true,
+
+  // Nested objects
+  user: {
+    id: 'user_123',
+    role: 'admin',
+  },
+
+  // Arrays
+  permissions: ['read', 'write', 'delete'],
+})
+```
+
+### Tags
+
+Tags help categorize and filter logs. Add them via the options parameter:
+
+```typescript
+timber.info('Payment processed', { amount: 99.99 }, {
+  tags: ['payments', 'success'],
+})
+
+timber.error('Payment failed', error, {
+  tags: ['payments', 'critical', 'pagerduty'],
+})
+```
+
+## Flow Tracking
+
+Flows group related logs across a multi-step process with automatic flow IDs and step indexing. See [Flows](/concepts/flows) for a conceptual overview.
+
+### Creating a Flow
+
+Use the `flow()` method to create a new flow. This is an async operation that creates the flow on the server:
+
+```typescript
+const flow = await timber.flow('checkout')
+
+flow.info('Started checkout')
+flow.info('Validated cart', { items: 3 })
+flow.info('Payment processed', { amount: 99.99 })
+flow.info('Order confirmed', { orderId: 'ord_123' })
+```
+
+Each log is automatically tagged with:
+- `flowId: "checkout-a1b2c3d4"` (auto-generated)
+- `stepIndex: 0, 1, 2, 3` (auto-incrementing)
+
+### Flow Properties
+
+```typescript
+const flow = await timber.flow('user-onboarding')
+
+console.log(flow.id)    // "user-onboarding-x7y8z9a0"
+console.log(flow.name)  // "user-onboarding"
+```
+
+### Flow Logging Methods
+
+Flows have the same logging methods as the main client:
+
+```typescript
+const flow = await timber.flow('data-pipeline')
+
+flow.debug('Debug info', { stage: 'init' })
+flow.info('Processing started')
+flow.warn('Slow operation', { duration: 5000 })
+flow.error('Processing failed', new Error('Timeout'))
+```
+
+### Flow Chaining
+
+Flow methods return the flow for chaining:
+
+```typescript
+const flow = await timber.flow('checkout')
+flow
+  .info('Cart validated')
+  .info('Payment authorized')
+  .info('Order created')
+  .info('Confirmation sent')
+```
+
+### Real-World Examples
+
+#### E-commerce Checkout
+
+```typescript
+async function processCheckout(cart: Cart, user: User) {
+  const flow = await timber.flow('checkout')
+
+  flow.info('Checkout started', {
+    userId: user.id,
+    itemCount: cart.items.length
+  })
+
+  // Validate cart
+  const validation = await validateCart(cart)
+  if (!validation.valid) {
+    flow.warn('Cart validation failed', { errors: validation.errors })
+    return { success: false }
+  }
+  flow.info('Cart validated')
+
+  // Process payment
+  try {
+    const payment = await processPayment(cart.total, user.paymentMethod)
+    flow.info('Payment processed', {
+      transactionId: payment.id,
+      amount: cart.total
+    })
+  } catch (error) {
+    flow.error('Payment failed', error)
+    return { success: false }
+  }
+
+  // Create order
+  const order = await createOrder(cart, user)
+  flow.info('Order created', { orderId: order.id })
+
+  // Send confirmation
+  await sendConfirmationEmail(user.email, order)
+  flow.info('Confirmation sent', { email: user.email })
+
+  return { success: true, orderId: order.id }
+}
+```
+
+#### API Request Lifecycle
+
+```typescript
+app.use(async (req, res, next) => {
+  const flow = await timber.flow('api-request')
+  req.flow = flow
+
+  flow.info('Request received', {
+    method: req.method,
+    path: req.path,
+    ip: req.ip,
+  })
+
+  const start = Date.now()
+
+  res.on('finish', () => {
+    flow.info('Response sent', {
+      status: res.statusCode,
+      duration: Date.now() - start,
+    })
+  })
+
+  next()
+})
+
+// In route handlers
+app.post('/users', async (req, res) => {
+  req.flow.info('Creating user', { email: req.body.email })
+
+  const user = await createUser(req.body)
+  req.flow.info('User created', { userId: user.id })
+
+  res.json(user)
+})
+```
+
+#### Background Job
+
+```typescript
+async function processJob(job: Job) {
+  const flow = await timber.flow(`job-${job.type}`)
+
+  flow.info('Job started', { jobId: job.id, type: job.type })
+
+  for (const item of job.items) {
+    flow.debug('Processing item', { itemId: item.id })
+    await processItem(item)
+  }
+
+  flow.info('Job completed', {
+    jobId: job.id,
+    processedCount: job.items.length
+  })
+}
+```
+
+### Flow ID Generation
+
+Flow IDs are generated server-side using the pattern: `{name}-{random8chars}`
+
+```
+checkout-a1b2c3d4
+user-onboarding-x7y8z9ab
+api-request-mn0p1q2r
+```
+
+### Level Filtering with Flows
+
+When using `minLevel` configuration, filtered logs don't increment the step index:
+
+```typescript
+const timber = createTimberlogs({
+  // ...
+  minLevel: 'info',
+})
+
+const flow = await timber.flow('example')
+flow.debug('Not sent')      // Filtered, stepIndex not incremented
+flow.info('First log')      // stepIndex: 0
+flow.debug('Not sent')      // Filtered, stepIndex not incremented
+flow.info('Second log')     // stepIndex: 1
+```
+
+This ensures your step indices remain sequential without gaps.
+
+## Raw Format Ingestion
+
+Send pre-formatted log data directly to the ingestion endpoint, bypassing the structured log pipeline. Useful for forwarding logs from external systems (syslog daemons, CSV exports, JSONL streams).
+
+### `ingestRaw(body, format, options?)`
+
+```typescript
+await timber.ingestRaw(
+  '<165>1 2024-01-15T10:30:00.000Z myhost api 1234 - - Connection refused',
+  'syslog',
+  { source: 'syslog-relay', environment: 'production' }
+)
+```
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `body` | `string` | The raw log data |
+| `format` | `FormatName` | One of `json`, `jsonl`, `syslog`, `text`, `csv`, `obl` |
+| `options?` | `IngestRawOptions` | Optional defaults for `source`, `environment`, `level`, `dataset` |
+
+The SDK sets the correct `Content-Type` header automatically and retries with exponential backoff on failure.
+
+### Examples
+
+**CSV:**
+
+```typescript
+await timber.ingestRaw(
+  'level,message,source\nerror,Connection refused,api\ninfo,Request completed,api',
+  'csv',
+  { environment: 'production' }
+)
+```
+
+**JSONL:**
+
+```typescript
+await timber.ingestRaw(
+  '{"level":"info","message":"line 1","source":"api","environment":"production"}\n{"level":"error","message":"line 2","source":"api","environment":"production"}',
+  'jsonl'
+)
+```
+
+**Plain text:**
+
+```typescript
+await timber.ingestRaw(
+  '2024-01-15 10:30:00 ERROR Connection refused\n2024-01-15 10:30:01 INFO Retrying...',
+  'text',
+  { source: 'nginx', environment: 'production' }
+)
+```
+
+### Supported Formats
+
+| Format | Content-Type | Description |
+|--------|-------------|-------------|
+| `json` | `application/json` | JSON array or `{ logs: [...] }` |
+| `jsonl` | `application/x-ndjson` | One JSON object per line |
+| `syslog` | `application/x-syslog` | RFC 5424 / RFC 3164 |
+| `text` | `text/plain` | One log per line |
+| `csv` | `text/csv` | Header row + data rows |
+| `obl` | `application/x-obl` | Open Board Logging |
+
+See [Log Ingestion](/api-reference/ingestion) for full format details.
+
+## Client Methods
+
+### `setUserId(userId)`
+
+Set the default user ID for subsequent logs.
+
+```typescript
+timber.setUserId('user_123')
+```
+
+### `setSessionId(sessionId)`
+
+Set the default session ID for subsequent logs.
+
+```typescript
+timber.setSessionId('sess_abc')
+```
+
+### `flush()`
+
+Immediately send all queued logs.
+
+```typescript
+await timber.flush()
+```
+
+### `disconnect()`
+
+Flush logs and stop the auto-flush timer.
+
+```typescript
+await timber.disconnect()
+```
+
+## Method Chaining
+
+All methods return `this` for chaining:
+
+```typescript
+timber
+  .setUserId('user_123')
+  .setSessionId('sess_abc')
+  .info('User action')
+  .debug('Debug info')
+```
+
+## Log Entry Interface
+
+```typescript
+interface LogEntry {
+  level: 'debug' | 'info' | 'warn' | 'error'
+  message: string
+  data?: Record<string, unknown>
+  userId?: string
+  sessionId?: string
+  requestId?: string
+  errorName?: string
+  errorStack?: string
+  tags?: string[]
+  flowId?: string
+  stepIndex?: number
+  dataset?: string
+  timestamp?: string
+  ipAddress?: string
+  country?: string
+}
+```
+
+## Options Object
+
+All logging methods accept an optional `options` object:
+
+```typescript
+timber.info('Message', { data: 'here' }, {
+  tags: ['important', 'billing'],
+})
+```
+
+<Tip>
+Ready to start logging? [Sign up free](https://app.timberlogs.dev) — send your first log in under 5 minutes.
+</Tip>

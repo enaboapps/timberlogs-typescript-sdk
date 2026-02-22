@@ -1,0 +1,18 @@
+{
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "SDKs",
+        "groups": [
+          {
+            "group": "SDK Reference",
+            "pages": [
+              "sdks/typescript",
+              "sdks/configuration"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

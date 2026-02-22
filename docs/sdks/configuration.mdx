@@ -1,0 +1,206 @@
+---
+title: Configuration
+description: Full reference for all SDK configuration options.
+---
+
+## Required Options
+
+<CodeGroup>
+```typescript TypeScript
+const timber = createTimberlogs({
+  source: 'my-app',         // Required: identifies your app/service
+  environment: 'production', // Required: development, staging, or production
+  apiKey: 'tb_live_xxx',     // Required for HTTP transport
+})
+```
+
+```python Python
+from timberlogs import create_timberlogs
+
+timber = create_timberlogs(
+    source="my-app",          # Required: identifies your app/service
+    environment="production",  # Required: development, staging, or production
+    api_key="tb_live_xxx",     # Required for HTTP transport
+)
+```
+</CodeGroup>
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `source` | `string` | Your application or service name. Used to filter logs. |
+| `environment` | `'development' \| 'staging' \| 'production'` | The environment your app is running in. |
+| `apiKey` | `string` | Your Timberlogs API key (starts with `tb_live_` or `tb_test_`). |
+
+## Optional Options
+
+<CodeGroup>
+```typescript TypeScript
+const timber = createTimberlogs({
+  source: 'my-app',
+  environment: 'production',
+  apiKey: process.env.TIMBER_API_KEY,
+
+  // Optional settings
+  version: '1.2.3',           // Your app version
+  dataset: 'analytics',       // Default dataset for log routing
+  userId: 'user_123',         // Default user ID for all logs
+  sessionId: 'sess_abc',      // Default session ID
+  batchSize: 10,              // Logs to batch before sending
+  flushInterval: 5000,        // Auto-flush interval in ms
+  minLevel: 'info',           // Minimum log level to send
+  onError: (err) => {},       // Error callback
+  retry: {
+    maxRetries: 3,
+    initialDelayMs: 1000,
+    maxDelayMs: 30000,
+  },
+})
+```
+
+```python Python
+timber = create_timberlogs(
+    source="my-app",
+    environment="production",
+    api_key=os.environ["TIMBER_API_KEY"],
+
+    # Optional settings
+    version="1.2.3",
+    dataset="analytics",
+    user_id="user_123",
+    session_id="sess_abc",
+    batch_size=10,
+    flush_interval=5.0,       # Auto-flush interval in seconds
+    min_level="info",
+    on_error=lambda e: print(e),
+    max_retries=3,
+    initial_delay_ms=1000,
+    max_delay_ms=30000,
+)
+```
+</CodeGroup>
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `version` | `string` | - | Your application version (e.g., `'1.2.3'`). |
+| `dataset` | `string` | `'default'` | Default dataset for grouping/routing logs. |
+| `userId` | `string` | - | Default user ID attached to all logs. |
+| `sessionId` | `string` | - | Default session ID attached to all logs. |
+| `batchSize` | `number` | `10` | Number of logs to batch before sending. |
+| `flushInterval` | `number` | `5000` | Milliseconds between auto-flush. |
+| `minLevel` | `LogLevel` | `'debug'` | Minimum level to send (`debug`, `info`, `warn`, `error`). |
+| `onError` | `function` | - | Called when sending fails after all retries. |
+| `retry` | `object` | See below | Retry configuration for failed requests. |
+
+## Retry Configuration
+
+The SDK automatically retries failed requests with exponential backoff.
+
+```typescript
+{
+  retry: {
+    maxRetries: 3,        // Number of retry attempts
+    initialDelayMs: 1000, // First retry delay
+    maxDelayMs: 30000,    // Maximum delay between retries
+  }
+}
+```
+
+## Log Level Filtering
+
+Use `minLevel` to filter out lower-priority logs:
+
+<CodeGroup>
+```typescript TypeScript
+const timber = createTimberlogs({
+  // ...
+  minLevel: 'warn', // Only send warn and error logs
+})
+
+timber.debug('This will NOT be sent')
+timber.info('This will NOT be sent')
+timber.warn('This WILL be sent')
+timber.error('This WILL be sent')
+```
+
+```python Python
+timber = create_timberlogs(
+    # ...
+    min_level="warn",  # Only send warn and error logs
+)
+
+timber.debug("This will NOT be sent")
+timber.info("This will NOT be sent")
+timber.warn("This WILL be sent")
+timber.error("This WILL be sent")
+```
+</CodeGroup>
+
+## Setting User/Session at Runtime
+
+You can update the user and session IDs after initialization:
+
+<CodeGroup>
+```typescript TypeScript
+// After user logs in
+timber.setUserId('user_123')
+timber.setSessionId('sess_abc')
+
+// Clear on logout
+timber.setUserId(undefined)
+timber.setSessionId(undefined)
+```
+
+```python Python
+# After user logs in
+timber.set_user_id("user_123")
+timber.set_session_id("sess_abc")
+
+# Clear on logout
+timber.set_user_id(None)
+timber.set_session_id(None)
+```
+</CodeGroup>
+
+## Validation Limits
+
+Both SDKs validate fields before sending. Logs that exceed these limits will be rejected.
+
+| Field | Limit |
+|-------|-------|
+| `message` | 1–10,000 characters |
+| `source` | 1–100 characters |
+| `errorName` | Max 200 characters |
+| `errorStack` | Max 10,000 characters |
+| `userId`, `sessionId`, `requestId` | Max 100 characters each |
+| `flowId`, `dataset` | Max 50 characters each |
+| `stepIndex` | 0–1,000 |
+| `tags` | Max 20 items, 50 characters each |
+
+## Environment Variables
+
+We recommend storing sensitive values in environment variables:
+
+```bash
+# .env
+TIMBER_API_KEY=tb_live_xxxxxxxxxxxxx
+```
+
+<CodeGroup>
+```typescript TypeScript
+const timber = createTimberlogs({
+  source: 'my-app',
+  environment: process.env.NODE_ENV || 'development',
+  apiKey: process.env.TIMBER_API_KEY,
+})
+```
+
+```python Python
+import os
+
+timber = create_timberlogs(
+    source="my-app",
+    environment=os.environ.get("PYTHON_ENV", "development"),
+    api_key=os.environ["TIMBER_API_KEY"],
+)
+```
+</CodeGroup>
