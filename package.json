@@ -1,6 +1,6 @@
 {
   "name": "timberlogs-client",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "TypeScript SDK for Timberlogs - structured logging made simple",
   "type": "module",
   "main": "./dist/index.js",
@@ -34,15 +34,15 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/enaboapps/timberlogs-typescript-sdk.git"
+    "url": "git+https://github.com/timberlogs/timberlogs-typescript-sdk.git"
   },
-  "homepage": "https://github.com/enaboapps/timberlogs-typescript-sdk#readme",
+  "homepage": "https://github.com/timberlogs/timberlogs-typescript-sdk#readme",
   "bugs": {
-    "url": "https://github.com/enaboapps/timberlogs-typescript-sdk/issues"
+    "url": "https://github.com/timberlogs/timberlogs-typescript-sdk/issues"
   },
   "devDependencies": {
-    "tsup": "^8.0.0",
-    "typescript": "^5.3.0",
-    "vitest": "^1.6.0"
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.9"
   }
 }
